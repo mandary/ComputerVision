@@ -503,31 +503,61 @@ void MainWindow::BilateralImage(QImage *image, double sigmaS, double sigmaI)
 
 void MainWindow::SobelImage(QImage *image)
 {
-    // Add your code here.
+    // Graytones then convolve with kernel
+    int r, c, rd, cd, i;
 
-    /***********************************************************************
-      When displaying the orientation image I
-      recommend the following:
+    QRgb pixel;
 
-    double mag; // magnitude of the gradient
-    double orien; // orientation of the gradient
+    // Graytones first
+    BlackWhiteImage(image);
 
-    double red = (sin(orien) + 1.0)/2.0;
-    double green = (cos(orien) + 1.0)/2.0;
-    double blue = 1.0 - red - green;
+    QImage buffer;
+    int w = image->width();
+    int h = image->height();
 
-    red *= mag*4.0;
-    green *= mag*4.0;
-    blue *= mag*4.0;
+    double gx[9] = {1, 0, -1, 2, 0, -2, 1, 0, -1};
+    double gy[9] = {-1, -2, -1, 0, 0, 0, 1, 2, 1};
 
-    // Make sure the pixel values range from 0 to 255
-    red = min(255.0, max(0.0, red));
-    green = min(255.0, max(0.0, green));
-    blue = min(255.0, max(0.0, blue));
+    buffer = image->copy(-1, -1, w + 2, h + 2);
 
-    image->setPixel(c, r, qRgb( (int) (red), (int) (green), (int) (blue)));
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            double magX = 0.0;
+            double magY = 0.0;
 
-    ************************************************************************/
+            for(rd = -1; rd <= 1; rd++) {
+                for(cd = -1; cd <= 1; cd++) {
+                    pixel = buffer.pixel(c + cd + 1, r + rd + 1);
+
+                    // Get the value of the kernel
+                    double weightX = gx[(rd + 1) * 3 + cd + 1];
+                    double weightY = gy[(rd + 1) * 3 + cd + 1];
+
+                    magX += weightX * (double) qRed(pixel);
+                    magY += weightY * (double) qRed(pixel);
+                }
+            }
+            double mag = sqrt(magX * magX + magY * magY); // magnitude
+            double orien = atan2(magY, magX); // orientation
+
+            double red = (sin(orien) + 1.0) / 2.0;
+            double green = (cos(orien) + 1.0) / 2.0;
+            double blue = 1.0 - red - green;
+
+            red *= mag * 4.0;
+            green *= mag * 4.0;
+            blue *= mag * 4.0;
+
+            // Make sure the pixel values range from 0 to 255
+            red = min(255.0, max(0.0, red));
+            green = min(255.0, max(0.0, green));
+            blue = min(255.0, max(0.0, blue));
+
+            // Store convolved pixel in the image to be returned.
+            image->setPixel(c, r, qRgb((int)red, (int)green, (int)blue));
+        }
+    }
+
 }
 
 
