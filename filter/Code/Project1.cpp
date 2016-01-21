@@ -455,7 +455,45 @@ void MainWindow::SecondDerivImage(QImage *image, double sigma)
 
 void MainWindow::SharpenImage(QImage *image, double sigma, double alpha)
 {
-    // Add your code here.  It's probably easiest to call SecondDerivImage as a helper function.
+    // sharpen = original - alpha * second derivative
+
+    int r, c;
+
+    QRgb pixel;
+
+    QImage buffer;
+    buffer = image->copy();
+
+    int w = image->width();
+    int h = image->height();
+
+    SecondDerivImage(&buffer, sigma);
+
+    for(r = 1; r < h - 1; r++) {
+        for(c = 1; c < w - 1; c++) {
+
+            double rgb[3] = {0, 0, 0};
+
+            pixel = image->pixel(c, r);
+            rgb[0] += (double) qRed(pixel);
+            rgb[1] += (double) qGreen(pixel);
+            rgb[2] += (double) qBlue(pixel);
+
+            pixel = buffer.pixel(c, r);
+            rgb[0] -= alpha * ((double) qRed(pixel) - 128.0);
+            rgb[1] -= alpha * ((double) qGreen(pixel) - 128.0);
+            rgb[2] -= alpha * ((double) qBlue(pixel) - 128.0);
+
+            // Adjust the rgb value
+            rgb[0] = min(255.0, max(0.0, rgb[0]));
+            rgb[1] = min(255.0, max(0.0, rgb[1]));
+            rgb[2] = min(255.0, max(0.0, rgb[2]));
+
+            // Store convolved pixel in the image to be returned.
+            image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
+        }
+    }
+
 }
 
 void MainWindow::BilateralImage(QImage *image, double sigmaS, double sigmaI)
