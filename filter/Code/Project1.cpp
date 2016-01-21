@@ -504,7 +504,7 @@ void MainWindow::BilateralImage(QImage *image, double sigmaS, double sigmaI)
 void MainWindow::SobelImage(QImage *image)
 {
     // Graytones then convolve with kernel
-    int r, c, rd, cd, i;
+    int r, c, rd, cd;
 
     QRgb pixel;
 
@@ -563,7 +563,38 @@ void MainWindow::SobelImage(QImage *image)
 
 void MainWindow::BilinearInterpolation(QImage *image, double x, double y, double rgb[3])
 {
-    // Add your code here.  Return the RGB values for the pixel at location (x,y) in double rgb[3].
+    // Return the RGB values for the pixel at location (x,y) in double rgb[3].
+
+    rgb[0] = rgb[1] = rgb[2] = 0.0;
+
+    int w = image->width();
+    int h = image->height();
+
+
+    int x1 = static_cast<int>(floor(x));
+    int y1 = static_cast<int>(floor(y));
+    int x2 = static_cast<int>(ceil(x+0.00001));
+    int y2 = static_cast<int>(ceil(y+0.00001));
+
+    // Check if x1, y1, x2, y2 in boundary of image
+
+    QRgb ltop = ((0 <= x1 && x1 < w && 0 <= y1 && y1 < h) ?
+                    image->pixel(x1, y1) : qRgb(0, 0, 0));
+    QRgb rtop = ((0 <= x1 && x1 < w && 0 <= y2 && y2 < h) ?
+                        image->pixel(x1, y2) : qRgb(0, 0, 0));
+    QRgb lbot = ((0 <= x2 && x2 < w && 0 <= y1 && y1 < h) ?
+                        image->pixel(x2, y1) : qRgb(0, 0, 0));
+    QRgb rbot = ((0 <= x2 && x2 < w && 0 <= y2 && y2 < h) ?
+                        image->pixel(x2, y2) : qRgb(0, 0, 0));
+
+    double denom = 1/((x2 - x1) * (y2 - y1));
+    rgb[0] += (x2 - x) * (y2 - y) * (double)qRed(ltop) + (x2 - x) * (y - y1) * (double)qRed(rtop) + 
+            (x - x1) * (y2 - y) * (double)qRed(lbot) + (x - x1) * (y - y1) * (double)qRed(rbot);
+    rgb[1] += (x2 - x) * (y2 - y) * (double)qGreen(ltop) + (x2 - x) * (y - y1) * (double)qGreen(rtop) + 
+            (x - x1) * (y2 - y) * (double)qGreen(lbot) + (x - x1) * (y - y1) * (double)qGreen(rbot);
+    rgb[2] += (x2 - x) * (y2 - y) * (double)qBlue(ltop) + (x2 - x) * (y - y1) * (double)qBlue(rtop) + 
+            (x - x1) * (y2 - y) * (double)qBlue(lbot) + (x - x1) * (y - y1) * (double)qBlue(rbot);
+
 }
 
 // Here is some sample code for rotating an image.  I assume orien is in degrees.
