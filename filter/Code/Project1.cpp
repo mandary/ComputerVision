@@ -176,11 +176,171 @@ void MainWindow::HalfImage(QImage &image)
 void MainWindow::GaussianBlurImage(QImage *image, double sigma)
 {
     // Add your code here.  Look at MeanBlurImage to get yourself started.
+    if(sigma == 0)
+        return;
+
+    int r, c, rd, cd, i;
+    QRgb pixel;
+
+    // This is the size of the kernel
+    int size = 2 * (int)sigma + 1;
+
+    // Create a buffer image so we're not reading and writing to the same image during filtering.
+    QImage buffer;
+    int w = image->width();
+    int h = image->height();
+
+    // This creates an image of size (w + 2*sigma, h + 2*sigma) with black borders.
+    // This could be improved by filling the pixels using a different padding technique (reflected, fixed, etc.)
+    buffer = image->copy(-(int)sigma, -(int)sigma, w + 2*(int)sigma, h + 2*(int)sigma);
+
+    // Compute kernel to convolve with the image.
+    double *kernel = new double [size*size];
+    double mean = size / 2.0;
+    for(i=0;i<size*size;i++)
+    {
+        kernel[i] = exp( -0.5 * (pow((i/size-mean)/sigma, 2.0) + pow((i%size-mean)/sigma, 2.0)) )
+                         / (2 * M_PI * sigma * sigma);
+    }
+
+    // Make sure kernel sums to 1
+    double denom = 0.000001;
+    for(i=0;i<size*size;i++)
+        denom += kernel[i];
+    for(i=0;i<size*size;i++)
+        kernel[i] /= denom;
+
+    // For each pixel in the image...
+    for(r=0;r<h;r++)
+    {
+        for(c=0;c<w;c++)
+        {
+            double rgb[3];
+
+            rgb[0] = 0.0;
+            rgb[1] = 0.0;
+            rgb[2] = 0.0;
+
+            // Convolve the kernel at each pixel
+            for(rd=-(int)sigma;rd<=(int)sigma;rd++)
+                for(cd=-(int)sigma;cd<=(int)sigma;cd++)
+                {
+                     // Get the pixel value
+                     pixel = buffer.pixel(c + cd + (int)sigma, r + rd + (int)sigma);
+
+                     // Get the value of the kernel
+                     double weight = kernel[(int)((rd + (int)sigma)*size + cd + (int)sigma)];
+
+                     rgb[0] += weight*(double) qRed(pixel);
+                     rgb[1] += weight*(double) qGreen(pixel);
+                     rgb[2] += weight*(double) qBlue(pixel);
+                }
+
+            // Store mean pixel in the image to be returned.
+            image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
+        }
+    }
+
+    // Clean up.
+    delete [] kernel;
 }
 
 void MainWindow::SeparableGaussianBlurImage(QImage *image, double sigma)
 {
     // Add your code here.  Done right, you should be able to copy most of the code from GaussianBlurImage.
+    if(sigma == 0)
+        return;
+
+    int r, c, i;
+    QRgb pixel;
+
+    // This is the size of the kernel
+    int size = 2 * (int)sigma + 1;
+
+    // Create a buffer image so we're not reading and writing to the same image during filtering.
+    QImage buffer;
+    int w = image->width();
+    int h = image->height();
+
+    // This creates an image of size (w + 2*sigma, h + 2*sigma) with black borders.
+    // This could be improved by filling the pixels using a different padding technique (reflected, fixed, etc.)
+    buffer = image->copy(-(int)sigma, -(int)sigma, w + 2*(int)sigma, h + 2*(int)sigma);
+
+    // Compute kernel to convolve with the image.
+    double* kernel = new double [size];
+    double mean = size / 2.0;
+    for(i=0;i<size;i++)
+    {
+        kernel[i] = exp(-0.5 * pow((i-mean)/sigma, 2.0)) / (sqrt(2 * M_PI)*sigma);
+    }
+
+    // Make sure kernel sums to 1
+    double denom = 0.000001;
+    for(i=0;i<size;i++)
+        denom += kernel[i];
+    for(i=0;i<size;i++)
+        kernel[i] /= denom;
+
+    // For each pixel in the image...
+    for(r=0;r<h;r++)
+    {
+        for(c=0;c<w;c++)
+        {
+            double rgb[3];
+
+            rgb[0] = 0.0;
+            rgb[1] = 0.0;
+            rgb[2] = 0.0;
+
+            // Convolve the kernel at each pixel
+            for(i = -(int)sigma; i <= (int)sigma; i++) {
+            
+                pixel = buffer.pixel(c + i + (int)sigma, r + (int)sigma);
+
+                     // Get the value of the kernel
+                     double weight = kernel[i + (int)sigma];
+
+                     rgb[0] += weight*(double) qRed(pixel);
+                     rgb[1] += weight*(double) qGreen(pixel);
+                     rgb[2] += weight*(double) qBlue(pixel);
+            }
+
+            // Store mean pixel in the image to be returned.
+            buffer.setPixel(c + (int)sigma, r + (int)sigma, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
+        }
+    }
+
+    for(r=0;r<h;r++)
+    {
+        for(c=0;c<w;c++)
+        {
+            double rgb[3];
+
+            rgb[0] = 0.0;
+            rgb[1] = 0.0;
+            rgb[2] = 0.0;
+
+            // Convolve the kernel at each pixel
+            for(i = -(int)sigma; i <= (int)sigma; i++) {
+            
+                pixel = buffer.pixel(c + (int)sigma, r + i + (int)sigma);
+
+                     // Get the value of the kernel
+                     double weight = kernel[i + (int)sigma];
+
+                     rgb[0] += weight*(double) qRed(pixel);
+                     rgb[1] += weight*(double) qGreen(pixel);
+                     rgb[2] += weight*(double) qBlue(pixel);
+            }
+
+            // Store mean pixel in the image to be returned.
+            image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
+        }
+    }
+
+    // Clean up.
+    delete [] kernel;
+
 }
 
 void MainWindow::FirstDerivImage(QImage *image, double sigma)
