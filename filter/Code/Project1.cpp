@@ -341,6 +341,7 @@ void MainWindow::SeparableGaussianBlurImage(QImage *image, double sigma)
 void MainWindow::FirstDerivImage(QImage *image, double sigma)
 {
     // For image derivatives really is (pixel - next pixel) / 1
+    // [-1 0 1] is the filter
     int r, c;
 
     QRgb pixel;
@@ -392,7 +393,7 @@ void MainWindow::FirstDerivImage(QImage *image, double sigma)
 void MainWindow::SecondDerivImage(QImage *image, double sigma)
 {
     // Again, derivative is really the difference
-    // This time is all neighbors - center
+    // This time is all neighbors - center, [1 -2 1] is the 1d filter
     int r, c;
 
     QRgb pixel;
@@ -691,7 +692,7 @@ void MainWindow::FindPeaksImage(QImage *image, double thres)
 
             magX /= 8.0;
             magY /= 8.0;
-            
+
             double mag = sqrt(magX * magX + magY * magY); // magnitude
             magnitude.setPixel(c, r, qRgb(0, (int)mag, 0));
 
@@ -770,12 +771,94 @@ void MainWindow::CrazyImage(QImage *image)
 
 void MainWindow::RandomSeedImage(QImage *image, int num_clusters)
 {
-     // Add your code here
+    int r, c, i, j, k;
+    QRgb pixel;
+    int iteration = 100;
+
+    int w = image->width();
+    int h = image->height();
+
+    // for assign cluster
+    int* cluster = new int[h * w];
+
+    // store k means
+    int* mean = new int[num_clusters * 3];
+
+    // random select k means
+    for(i = 0; i < num_clusters; i++) {
+        for(j = 0; j < 3; j++) {
+            mean[i * 3 + j] = rand() % 256;
+        }
+    }
+
+    for(i = 0; i < iteration; i++) {
+        for(r = 0; r < h; r++) {
+            for(c = 0; c < w; c++) {
+
+                pixel = image->pixel(c, r);
+                int min = INFINITY;
+                int select = 0;
+                for(k = 0; k < num_clusters; k++) {
+                    int distance = abs(qRed(pixel) - mean[k * 3]) + abs(qGreen(pixel) - mean[k * 3 + 1]) + abs(qBlue(pixel) - mean[k * 3 + 2]);
+                    if (distance < min) {
+                        min = distance;
+                        select = k;
+                    }
+                }
+
+                cluster[r * w + c] = select;
+            }
+        }
+
+        // keep track of pixel count of each cluster
+        int* count = new int[num_clusters];
+        for(k = 0; k < num_clusters; k++) {
+            count[k] = 0;
+            mean[k * 3] = mean[k * 3 + 1] = mean[k * 3 + 2] = 0;
+            for(r = 0; r < h; r++) {
+                for(c = 0; c < w; c++) {
+                    pixel = image->pixel(c, r);
+                    
+                    // accumulate cluster sum
+                    if(cluster[r * w + c] == k) {
+                        mean[k * 3] += qRed(pixel);
+                        mean[k * 3 + 1] += qGreen(pixel);
+                        mean[k * 3 + 2] += qBlue(pixel);
+                        count[k] += 1;
+                    }
+
+                }
+            }
+
+            // Average
+            if(count[k] != 0) {
+                mean[k * 3] /= count[k];
+                mean[k * 3 + 1] /= count[k];
+                mean[k * 3 + 2] /= count[k];
+            }
+        }
+
+        delete [] count;
+    }
+
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            image->setPixel(c, r, qRgb(mean[cluster[r * w + c] * 3], 
+                mean[cluster[r * w + c] * 3 + 1], mean[cluster[r * w + c] * 3 + 2]));
+        }
+    }
+
+    delete [] cluster;
+    delete [] mean;
+
 }
 
 void MainWindow::PixelSeedImage(QImage *image, int num_clusters)
 {
-    // Add your code here
+    
+
+
+
 }
 
 void MainWindow::HistogramSeedImage(QImage *image, int num_clusters)
