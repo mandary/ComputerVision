@@ -537,6 +537,10 @@ void MainWindow::SobelImage(QImage *image)
                     magY += weightY * (double) qRed(pixel);
                 }
             }
+
+            magX /= 8.0;
+            magY /= 8.0;
+
             double mag = sqrt(magX * magX + magY * magY); // magnitude
             double orien = atan2(magY, magX); // orientation
 
@@ -642,7 +646,110 @@ void MainWindow::RotateImage(QImage *image, double orien)
 
 void MainWindow::FindPeaksImage(QImage *image, double thres)
 {
-    // Add your code here.
+    // First compute edge magnitude and orientation for the image with sobel operator
+
+    int r, c, rd, cd;
+
+    QRgb pixel;
+
+    // Graytones first
+    BlackWhiteImage(image);
+
+    QImage buffer;
+
+    // store pixel magnitude
+    QImage magnitude = image->copy();
+
+    // store pixel orientation
+    QImage orientation = image->copy();
+
+    int w = image->width();
+    int h = image->height();
+
+    double gx[9] = {1, 0, -1, 2, 0, -2, 1, 0, -1};
+    double gy[9] = {-1, -2, -1, 0, 0, 0, 1, 2, 1};
+
+    buffer = image->copy(-1, -1, w + 2, h + 2);
+
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            double magX = 0.0;
+            double magY = 0.0;
+
+            for(rd = -1; rd <= 1; rd++) {
+                for(cd = -1; cd <= 1; cd++) {
+                    pixel = buffer.pixel(c + cd + 1, r + rd + 1);
+
+                    // Get the value of the kernel
+                    double weightX = gx[(rd + 1) * 3 + cd + 1];
+                    double weightY = gy[(rd + 1) * 3 + cd + 1];
+
+                    magX += weightX * (double) qRed(pixel);
+                    magY += weightY * (double) qRed(pixel);
+                }
+            }
+
+            magX /= 8.0;
+            magY /= 8.0;
+            
+            double mag = sqrt(magX * magX + magY * magY); // magnitude
+            magnitude.setPixel(c, r, qRgb(0, (int)mag, 0));
+
+            double orien = atan2(magY, magX); // orientation
+
+            double red = sin(orien);
+            double green = cos(orien);
+
+            orientation.setPixel(c, r, qRgb((int)red, (int)green, 0));
+
+        }
+    }
+
+    pixel = qRgb(0, 0, 0);
+    // zero out the image
+    image->fill(pixel);
+
+
+    // Compare edge magnitude
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            pixel = magnitude.pixel(c, r);
+            double mag0 = (double)qGreen(pixel);
+
+            if(mag0 > thres) {
+                pixel = orientation.pixel(c, r);
+                double dsin = (double)qRed(pixel);
+                double dcos = (double)qGreen(pixel);
+
+                // pixel perpendicular
+                double x1, y1;
+
+                double e0[3];
+
+                x1 = dcos + c;
+                y1 = dsin + r;
+
+                BilinearInterpolation(&magnitude, x1, y1, e0);
+
+                // pixel perpendicular
+                double x2, y2;
+
+                double e1[3];
+
+                x2 = -dcos + c;
+                y2 = -dsin + r;
+
+                BilinearInterpolation(&magnitude, x2, y2, e1);
+
+                if(mag0 >= e0[1] && mag0 >= e1[1]) {
+                    image->setPixel(c, r, qRgb(255, 255, 255));
+                }
+
+            }
+
+        }
+    }
+
 }
 
 
@@ -675,45 +782,3 @@ void MainWindow::HistogramSeedImage(QImage *image, int num_clusters)
 {
     // Add your code here
 }
-
-
-// void Convolve(QImage *image, int radius, double* kernel, int height, int width) {
-//     int r, c, rd, cd, i;
-
-//     QRgb pixel;
-
-//     // get width and height of image
-//     int w = image->width();
-//     int h = image->height();
-
-//     int size = 2 * radius + 1;
-
-//     QImage buffer;
-
-//     // make copy of original image with 
-//     buffer = image->copy(-radius, -radius, w + 2 * radius, h + 2 * radius);
-
-//     // convolve image with kernel
-//     for (r = 0; r < h; r++) {
-//         for (c = 0; c < w; c++) {
-//             double rgb[3];
-//             rgb[0] = 0.0;
-//             rgb[1] = 0.0;
-//             rgb[2] = 0.0;
-
-//             // for each pixel convolve
-//             for (rd = -radius; rd < -radius + height; rd++) {
-//                 for (cd = -radius; cd < -radius + width; cd++) {
-//                     pixel = buffer.pixel(c + cd + radius, r + rd + radius);
-//                     double weight = kernel[width * (rd + radius) + cd + radius]
-
-//                     rgb[0] += weight * (double) qRed(pixel);
-//                     rgb[1] += weight * (double) qGreen(pixel);
-//                     rgb[2] += weight * (double) qBlue(pixel);
-//                 }
-//             }
-
-//             image->setPixel(c, r, qRgb((int) floor(rgb[0] + 0.5), (int) floor(rgb[1] + 0.5), (int) floor(rgb[2] + 0.5)));
-//         }
-//     }
-// }
