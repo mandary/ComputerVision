@@ -855,10 +855,88 @@ void MainWindow::RandomSeedImage(QImage *image, int num_clusters)
 
 void MainWindow::PixelSeedImage(QImage *image, int num_clusters)
 {
-    
+        int r, c, i, j, k;
+    QRgb pixel;
+    int iteration = 100;
 
+    int w = image->width();
+    int h = image->height();
 
+    // for assign cluster
+    int* cluster = new int[h * w];
 
+    // store k means
+    int* mean = new int[num_clusters * 3];
+
+    // random sample k pixels
+    for(i = 0; i < num_clusters; i++) {
+        int x = rand() % w;
+        int y = rand() % h;
+        pixel = image->pixel(x, y);
+        mean[i * 3] = qRed(pixel);
+        mean[i * 3 + 1] = qGreen(pixel);
+        mean[i * 3 + 2] = qBlue(pixel);
+    }
+
+    for(i = 0; i < iteration; i++) {
+        for(r = 0; r < h; r++) {
+            for(c = 0; c < w; c++) {
+
+                pixel = image->pixel(c, r);
+                int min = INFINITY;
+                int select = 0;
+                for(k = 0; k < num_clusters; k++) {
+                    int distance = abs(qRed(pixel) - mean[k * 3]) + abs(qGreen(pixel) - mean[k * 3 + 1]) + abs(qBlue(pixel) - mean[k * 3 + 2]);
+                    if (distance < min) {
+                        min = distance;
+                        select = k;
+                    }
+                }
+
+                cluster[r * w + c] = select;
+            }
+        }
+
+        // keep track of pixel count of each cluster
+        int* count = new int[num_clusters];
+        for(k = 0; k < num_clusters; k++) {
+            count[k] = 0;
+            mean[k * 3] = mean[k * 3 + 1] = mean[k * 3 + 2] = 0;
+            for(r = 0; r < h; r++) {
+                for(c = 0; c < w; c++) {
+                    pixel = image->pixel(c, r);
+                    
+                    // accumulate cluster sum
+                    if(cluster[r * w + c] == k) {
+                        mean[k * 3] += qRed(pixel);
+                        mean[k * 3 + 1] += qGreen(pixel);
+                        mean[k * 3 + 2] += qBlue(pixel);
+                        count[k] += 1;
+                    }
+
+                }
+            }
+
+            // Average
+            if(count[k] != 0) {
+                mean[k * 3] /= count[k];
+                mean[k * 3 + 1] /= count[k];
+                mean[k * 3 + 2] /= count[k];
+            }
+        }
+
+        delete [] count;
+    }
+
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            image->setPixel(c, r, qRgb(mean[cluster[r * w + c] * 3], 
+                mean[cluster[r * w + c] * 3 + 1], mean[cluster[r * w + c] * 3 + 2]));
+        }
+    }
+
+    delete [] cluster;
+    delete [] mean;
 }
 
 void MainWindow::HistogramSeedImage(QImage *image, int num_clusters)
