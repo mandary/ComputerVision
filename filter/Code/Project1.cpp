@@ -855,7 +855,7 @@ void MainWindow::RandomSeedImage(QImage *image, int num_clusters)
 
 void MainWindow::PixelSeedImage(QImage *image, int num_clusters)
 {
-        int r, c, i, j, k;
+    int r, c, i, j, k;
     QRgb pixel;
     int iteration = 100;
 
