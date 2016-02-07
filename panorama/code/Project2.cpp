@@ -569,7 +569,12 @@ Project a point (x1, y1) using the homography transformation h
 *******************************************************************************/
 void MainWindow::Project(double x1, double y1, double &x2, double &y2, double h[3][3])
 {
-    // Add your code here.
+    double u = h[0][0] * x1 + h[0][1] * y1 + h[0][2];
+    double v = h[1][0] * x1 + h[1][1] * y1 + h[1][2];
+    double w = h[2][0] * x1 + h[2][1] * y1 + h[2][2];
+
+    x2 = u / w;
+    y2 = v / w;
 }
 
 /*******************************************************************************
@@ -583,9 +588,25 @@ Count the number of inliers given a homography.  This is a helper function for R
 *******************************************************************************/
 int MainWindow::ComputeInlierCount(double h[3][3], CMatches *matches, int numMatches, double inlierThreshold)
 {
-    // Add your code here.
+    int i;
+    int count = 0;
 
-    return 0;
+    for(i = 0; i < numMatches; i++) {
+        double x1 = matches[i].m_X1;
+        double y1 = matches[i].m_Y1;
+        double x2, y2;
+
+        // Project the first point
+        Project(x1, y1, x2, y2, h);
+
+        // Check projected point an inlier if distance < threshold
+        double distance = pow(x2 - matches[i].m_X2, 2) + pow(y2 - matches[i].m_Y2, 2);
+
+        if(distance < inlierThreshold * inlierThreshold) count++;
+
+    }
+
+    return count;
 }
 
 
@@ -603,11 +624,77 @@ Compute homography transformation between images using RANSAC.
 void MainWindow::RANSAC(CMatches *matches, int numMatches, int numIterations, double inlierThreshold,
                         double hom[3][3], double homInv[3][3], QImage &image1Display, QImage &image2Display)
 {
-    // Add your code here.
+    int i, j;
+    CMatches randomMatches[4];
+    double h[3][3];
+
+    int max = 0;
+
+    for(i = 0; i < numIterations; i++) {
+
+        // Randomly select 4 matching pairs
+        
+        for(j = 0; j < 4; j++) {
+            int num = rand() % numMatches;
+
+            randomMatches[j].m_X1 = matches[num].m_X1;
+            randomMatches[j].m_X2 = matches[num].m_X2;
+            randomMatches[j].m_Y1 = matches[num].m_Y1;
+            randomMatches[j].m_Y2 = matches[num].m_Y2;
+        }
+
+        // Compute Homography for the 4 random matches and inliers count
+        if(ComputeHomography(randomMatches, 4, h, true)) {
+            int count = ComputeInlierCount(h, matches, numMatches, inlierThreshold);
+
+            // Check if the homography is the best
+            if(count > max) {
+                max = count;
+                int x, y;
+                for(x = 0; x < 3; x++) {
+                    for(y = 0; y < 3; y++) {
+                        hom[x][y] = h[x][y];
+                    }
+                }
+            }
+        }
+    }
+
+    CMatches *inliers = new CMatches[max];
+    int numInliers = 0;
+
+    // Compute inliers for the best homography
+    for(i = 0; i < numMatches; i++) {
+        double x1 = matches[i].m_X1;
+        double y1 = matches[i].m_Y1;
+        double x2, y2;
+
+        // Project the first point
+        Project(x1, y1, x2, y2, h);
+
+        // Check projected point an inlier if distance < threshold
+        double distance = pow(x2 - matches[i].m_X2, 2) + pow(y2 - matches[i].m_Y2, 2);
+
+        // Store inlier
+        if(distance < inlierThreshold * inlierThreshold) {
+            inliers[numInliers].m_X1 = matches[i].m_X1;
+            inliers[numInliers].m_X2 = matches[i].m_X2;
+            inliers[numInliers].m_Y1 = matches[i].m_Y1;
+            inliers[numInliers].m_Y2 = matches[i].m_Y2;
+            numInliers++;
+        }
+
+    }
+
+    // Recompute the best homography and inverse homography
+    ComputeHomography(inliers, numInliers, hom, true);
+    ComputeHomography(inliers, numInliers, homInv, false);
 
     // After you're done computing the inliers, display the corresponding matches.
-    //DrawMatches(inliers, numInliers, image1Display, image2Display);
+    DrawMatches(inliers, numInliers, image1Display, image2Display);
 
+    // Clean up
+    delete [] inliers;
 }
 
 /*******************************************************************************
@@ -620,7 +707,37 @@ Bilinearly interpolate image (helper function for Stitch)
 *******************************************************************************/
 bool MainWindow::BilinearInterpolation(QImage *image, double x, double y, double rgb[3])
 {
-    // Add your code here.
+    // Return the RGB values for the pixel at location (x,y) in double rgb[3].
+
+    rgb[0] = rgb[1] = rgb[2] = 0.0;
+
+    int w = image->width();
+    int h = image->height();
+
+
+    int x1 = static_cast<int>(floor(x));
+    int y1 = static_cast<int>(floor(y));
+    int x2 = static_cast<int>(ceil(x+0.00001));
+    int y2 = static_cast<int>(ceil(y+0.00001));
+
+    // Check if x1, y1, x2, y2 in boundary of image
+
+    QRgb ltop = ((0 <= x1 && x1 < w && 0 <= y1 && y1 < h) ?
+                    image->pixel(x1, y1) : qRgb(0, 0, 0));
+    QRgb rtop = ((0 <= x1 && x1 < w && 0 <= y2 && y2 < h) ?
+                        image->pixel(x1, y2) : qRgb(0, 0, 0));
+    QRgb lbot = ((0 <= x2 && x2 < w && 0 <= y1 && y1 < h) ?
+                        image->pixel(x2, y1) : qRgb(0, 0, 0));
+    QRgb rbot = ((0 <= x2 && x2 < w && 0 <= y2 && y2 < h) ?
+                        image->pixel(x2, y2) : qRgb(0, 0, 0));
+
+    double denom = 1/((x2 - x1) * (y2 - y1));
+    rgb[0] += (x2 - x) * (y2 - y) * (double)qRed(ltop) + (x2 - x) * (y - y1) * (double)qRed(rtop) + 
+            (x - x1) * (y2 - y) * (double)qRed(lbot) + (x - x1) * (y - y1) * (double)qRed(rbot);
+    rgb[1] += (x2 - x) * (y2 - y) * (double)qGreen(ltop) + (x2 - x) * (y - y1) * (double)qGreen(rtop) + 
+            (x - x1) * (y2 - y) * (double)qGreen(lbot) + (x - x1) * (y - y1) * (double)qGreen(rbot);
+    rgb[2] += (x2 - x) * (y2 - y) * (double)qBlue(ltop) + (x2 - x) * (y - y1) * (double)qBlue(rtop) + 
+            (x - x1) * (y2 - y) * (double)qBlue(lbot) + (x - x1) * (y - y1) * (double)qBlue(rbot);
 
     return true;
 }
