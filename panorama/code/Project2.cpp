@@ -260,9 +260,92 @@ Blur a single channel floating point image with a Gaussian.
 *******************************************************************************/
 void MainWindow::SeparableGaussianBlurImage(double *image, int w, int h, double sigma)
 {
-    // Add your code here
+    if(sigma == 0) return;
 
-    // To access the pixel (c,r), use image[r*width + c].
+    int r, c, rd, cd, i;
+    double pixel;
+
+    // This is the size of the kernel
+    int isig = (int)sigma;
+    int size = 2 * isig + 1;
+
+
+    // Create a buffer image so we're not reading and writing to the same image during filtering.
+    double *buffer = new double [w * h];
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            buffer[r * w + c] = image[r * w + c]; 
+        }
+    }
+
+    // Compute kernel to convolve with the image.
+    double* kernel = new double [size];
+    double mean = size / 2.0;
+    double sum = 0.000001;
+    for(i = 0; i < size; i++) {
+        kernel[i] = exp(-0.5 * pow((i - mean) / sigma, 2.0)) / (sqrt(2 * M_PI) * sigma);
+        sum += kernel[i];
+    }
+
+    // Normalize kernel weights
+    for(i = 0; i < size; i++)
+        kernel[i] /= sum;
+
+    // Convolve kernel around image
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            double result = 0.0;
+
+            // Convolve the kernel at each pixel
+            for(rd = -isig; rd <= isig; rd++) {
+                if(r + rd >= 0 && r + rd < h) {
+            
+                    pixel = buffer[(r + rd) * w + c];
+
+                    // Get the value of the kernel
+                    double weight = kernel[rd + isig];
+
+                    result += weight * pixel;
+                }
+
+            }
+
+            // Store convolved pixel in the image to be returned.
+            image[r * w + c] = result;
+        }
+    }
+
+    // make a new copy from updated image
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            buffer[r * w + c] = image[r * w + c]; 
+        }
+    }
+
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            double result = 0.0;
+
+            // Convolve the kernel at each pixel
+            for(cd = -isig; cd <= isig; cd++) {
+                if(c + cd >= 0 && c + cd < w) {
+                    pixel = buffer[r * w + c + cd];
+
+                    // Get the value of the kernel
+                    double weight = kernel[cd + isig];
+
+                    result += weight * pixel;
+                }
+            }
+
+            // Store convolved pixel in the image to be returned.
+            image[r * w + c] = result;
+        }
+    }
+
+    // Clean up.
+    delete [] kernel;
+    delete [] buffer;
 
 }
 
@@ -286,29 +369,125 @@ void MainWindow::HarrisCornerDetector(QImage image, double sigma, double thres, 
 
     numInterestsPts = 0;
 
-    // Compute the corner response using just the green channel
-    for(r=0;r<h;r++)
-       for(c=0;c<w;c++)
-        {
+    // Set up matrix
+    double *ix = new double[w * h];
+    double *iy = new double[w * h];
+    double *ixy = new double[w * h];
+    double *harris = new double[w * h];
+
+    // Compute the corner response using graytone
+    // Initialize ixix, iyiy, ixiy
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
             pixel = image.pixel(c, r);
 
-            buffer[r*w + c] = (double) qGreen(pixel);
+            buffer[r * w + c] = (double) qGreen(pixel);
+
+            ix[r * w + c] = 0.0;
+            iy[r * w + c] = 0.0;
+            ixy[r * w + c] = 0.0;
         }
+    }
 
-    // Write your Harris corner detection code here.
+    
 
-    // Once you uknow the number of interest points allocate an array as follows:
-    // *interestPts = new CIntPt [numInterestsPts];
-    // Access the values using: (*interestPts)[i].m_X = 5.0;
-    //
-    // The position of the interest point is (m_X, m_Y)
+    // Compute the ixix, iyiy, ixiy
+    for(r = 1; r < h - 1; r++) {
+        for (c = 1; c < w - 1; c++) {
+            double left = buffer[r * w + c - 1];
+            double right = buffer[r * w + c + 1];
+            double bottom = buffer[(r + 1) * w + c];
+            double top = buffer[(r - 1) * w + c];
+
+            ix[r * w + c] = pow(right - left, 2);
+            iy[r * w + c] = pow(bottom - top, 2);
+            ixy[r * w + c] = (right - left) * (bottom - top);
+        }
+    }
+
+    // Smooth
+    SeparableGaussianBlurImage(ix, w, h, sigma);
+    SeparableGaussianBlurImage(iy, w, h, sigma);
+    SeparableGaussianBlurImage(ixy, w, h, sigma);
+
+    // Compute Harris = det(H) / trace(H)
+    for(r = 1; r < h - 1; r++) {
+        for(c = 1; c < w - 1; c++) {
+            double xx = ix[r * w + c];
+            double yy = iy[r * w + c];
+            double xy = ixy[r * w + c];
+
+            double det = xx * yy - xy * xy;
+            double trace = xx + yy;
+
+            double val = 0.0;
+            if(trace > 0.0)
+                val = det / trace;
+
+            harris[r * w + c] = val;
+
+            val = max(0.0, min(255.0, val));
+
+            imageDisplay.setPixel(c, r, qRgb(val, val, val));
+        }
+    }
+
+    // Compute interest points and display
+    for(r = 1; r < h - 1; r++) {
+        for(c = 1; c < w - 1; c++) {
+
+            int x, y;
+            bool max = true;
+            // The corner response > threshold
+            // Might be interesting to look at
+            if(harris[r * w + c] > thres) {
+                for(x = -1; x <= 1; x++) {
+                    for(y = -1; y <= 1; y++) {
+                        // Not local miximum of surrounding pixels
+                        if(harris[r * w + c] < harris[(r + x) * w + c + y]) {
+                            max = false;
+                        }
+
+                    }
+                }
+                // Local maximum, corner
+                if(max) {
+                    numInterestsPts++;
+                    imageDisplay.setPixel(c, r, qRgb((int)255, (int)0, (int)0));
+                }
+            }
+        }
+    }
+
+
+    // Store interest points
     // The descriptor of the interest point is stored in m_Desc
     // The length of the descriptor is m_DescSize, if m_DescSize = 0, then it is not valid.
+
+    *interestPts = new CIntPt [numInterestsPts];
+    int i = 0;
+    for(r = 1; r < h - 1; r++) {
+        for(c = 1; c < w - 1; c++) {
+            pixel = imageDisplay.pixel(c, r);
+            // Interest point value
+            if(qRed(pixel) == 255 && qGreen(pixel) == 0 && qBlue(pixel) == 0) {
+                (*interestPts)[i].m_X = (double) c;
+                (*interestPts)[i].m_Y = (double) r;
+                i++;
+            }
+        }
+    }
+
 
     // Once you are done finding the interest points, display them on the image
     DrawInterestPoints(*interestPts, numInterestsPts, imageDisplay);
 
+    // Clean up
     delete [] buffer;
+    delete [] ix;
+    delete [] ixy;
+    delete [] iy;
+    delete [] harris;
 }
 
 

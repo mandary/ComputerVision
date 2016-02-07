@@ -29,7 +29,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <math.h>
-#include "matrix.h"
+#include "Matrix.h"
 
 #define  FALSE 0
 #define  TRUE  1
