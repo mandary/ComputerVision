@@ -426,7 +426,8 @@ void MainWindow::HarrisCornerDetector(QImage image, double sigma, double thres, 
 
             harris[r * w + c] = val;
 
-            val = max(0.0, min(255.0, val));
+            // Scale for displaying
+            val = max(50.0, min(255.0, val));
 
             imageDisplay.setPixel(c, r, qRgb(val, val, val));
         }
@@ -463,7 +464,6 @@ void MainWindow::HarrisCornerDetector(QImage image, double sigma, double thres, 
     // Store interest points
     // The descriptor of the interest point is stored in m_Desc
     // The length of the descriptor is m_DescSize, if m_DescSize = 0, then it is not valid.
-
     *interestPts = new CIntPt [numInterestsPts];
     int i = 0;
     for(r = 1; r < h - 1; r++) {
@@ -508,7 +508,6 @@ void MainWindow::MatchInterestPoints(QImage image1, CIntPt *interestPts1, int nu
                              QImage image2, CIntPt *interestPts2, int numInterestsPts2,
                              CMatches **matches, int &numMatches, QImage &image1Display, QImage &image2Display)
 {
-    numMatches = 0;
 
     // Compute the descriptors for each interest point.
     // You can access the descriptor for each interest point using interestPts1[i].m_Desc[j].
@@ -516,13 +515,47 @@ void MainWindow::MatchInterestPoints(QImage image1, CIntPt *interestPts1, int nu
     ComputeDescriptors(image1, interestPts1, numInterestsPts1);
     ComputeDescriptors(image2, interestPts2, numInterestsPts2);
 
-    // Add your code here for finding the best matches for each point.
+    
+    *matches = new CMatches[numInterestsPts1];
 
-    // Once you uknow the number of matches allocate an array as follows:
-    // *matches = new CMatches [numMatches];
-    //
+    int x, y, z;
+    numMatches = 0;
+
+    // Compute best match from image 2 for each interest point in image 1
+    // Best matching point has the smallest norm distance
+    for(x = 0; x < numInterestsPts1; x++) {
+        // Check if descriptor valid
+        if(interestPts1[x].m_DescSize > 0) {
+            CIntPt pt1 = interestPts1[x];
+            int min = 0;
+            double mindist = INFINITY;
+
+            for(y = 0; y < numInterestsPts2; y++) {
+                // Check if descriptor valid
+                if(interestPts2[y].m_DescSize > 0) {
+                    CIntPt pt2 = interestPts2[y];
+                    double dist = 0.0;
+                    for(z = 0; z < DESC_SIZE; z++) {
+                        dist += pow(pt1.m_Desc[z] - pt2.m_Desc[z], 2);
+                    }
+                    if(dist < mindist) {
+                        mindist = dist;
+                        min = y;
+                    }
+                }
+            }
+
+            // Store matching points
+            (*matches)[numMatches].m_X1 = interestPts1[x].m_X;
+            (*matches)[numMatches].m_Y1 = interestPts1[x].m_Y;
+            (*matches)[numMatches].m_X2 = interestPts2[min].m_X;
+            (*matches)[numMatches].m_Y2 = interestPts2[min].m_Y;
+            numMatches++;
+        }
+    }
+
+
     // The position of the interest point in iamge 1 is (m_X1, m_Y1)
-    // The position of the interest point in image 2 is (m_X2, m_Y2)
 
     // Draw the matches
     DrawMatches(*matches, numMatches, image1Display, image2Display);
