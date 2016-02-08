@@ -663,24 +663,19 @@ void MainWindow::RANSAC(CMatches *matches, int numMatches, int numIterations, do
     CMatches *inliers = new CMatches[max];
     int numInliers = 0;
 
-    // Compute inliers for the best homography
     for(i = 0; i < numMatches; i++) {
-        double x1 = matches[i].m_X1;
-        double y1 = matches[i].m_Y1;
         double x2, y2;
 
-        // Project the first point
-        Project(x1, y1, x2, y2, h);
+        Project(matches[i].m_X1, matches[i].m_Y1, x2, y2, hom);
 
-        // Check projected point an inlier if distance < threshold
-        double distance = pow(x2 - matches[i].m_X2, 2) + pow(y2 - matches[i].m_Y2, 2);
+        double distance = pow(x2 - matches[i].m_X2, 2.0) + pow(y2 - matches[i].m_Y2, 2.0);
 
-        // Store inlier
         if(distance < inlierThreshold * inlierThreshold) {
             inliers[numInliers].m_X1 = matches[i].m_X1;
-            inliers[numInliers].m_X2 = matches[i].m_X2;
             inliers[numInliers].m_Y1 = matches[i].m_Y1;
+            inliers[numInliers].m_X2 = matches[i].m_X2;
             inliers[numInliers].m_Y2 = matches[i].m_Y2;
+
             numInliers++;
         }
 
@@ -695,6 +690,7 @@ void MainWindow::RANSAC(CMatches *matches, int numMatches, int numIterations, do
 
     // Clean up
     delete [] inliers;
+
 }
 
 /*******************************************************************************
@@ -721,23 +717,22 @@ bool MainWindow::BilinearInterpolation(QImage *image, double x, double y, double
     int y2 = static_cast<int>(ceil(y+0.00001));
 
     // Check if x1, y1, x2, y2 in boundary of image
+    if(x1 >= 0 &&  x1 < w && x2 >= 0 && x2 < w && y1 >= 0 && y1 < h && y2 >= 0 && y2 < h) {
+        QRgb ltop = image->pixel(x1, y1);
+        QRgb rtop = image->pixel(x1, y2);
+        QRgb lbot = image->pixel(x2, y1);
+        QRgb rbot = image->pixel(x2, y2);
 
-    QRgb ltop = ((0 <= x1 && x1 < w && 0 <= y1 && y1 < h) ?
-                    image->pixel(x1, y1) : qRgb(0, 0, 0));
-    QRgb rtop = ((0 <= x1 && x1 < w && 0 <= y2 && y2 < h) ?
-                        image->pixel(x1, y2) : qRgb(0, 0, 0));
-    QRgb lbot = ((0 <= x2 && x2 < w && 0 <= y1 && y1 < h) ?
-                        image->pixel(x2, y1) : qRgb(0, 0, 0));
-    QRgb rbot = ((0 <= x2 && x2 < w && 0 <= y2 && y2 < h) ?
-                        image->pixel(x2, y2) : qRgb(0, 0, 0));
+        rgb[0] += (x2 - x) * (y2 - y) * (double)qRed(ltop) + (x2 - x) * (y - y1) * (double)qRed(rtop) + 
+                (x - x1) * (y2 - y) * (double)qRed(lbot) + (x - x1) * (y - y1) * (double)qRed(rbot);
+        rgb[1] += (x2 - x) * (y2 - y) * (double)qGreen(ltop) + (x2 - x) * (y - y1) * (double)qGreen(rtop) + 
+                (x - x1) * (y2 - y) * (double)qGreen(lbot) + (x - x1) * (y - y1) * (double)qGreen(rbot);
+        rgb[2] += (x2 - x) * (y2 - y) * (double)qBlue(ltop) + (x2 - x) * (y - y1) * (double)qBlue(rtop) + 
+                (x - x1) * (y2 - y) * (double)qBlue(lbot) + (x - x1) * (y - y1) * (double)qBlue(rbot);
 
-    double denom = 1/((x2 - x1) * (y2 - y1));
-    rgb[0] += (x2 - x) * (y2 - y) * (double)qRed(ltop) + (x2 - x) * (y - y1) * (double)qRed(rtop) + 
-            (x - x1) * (y2 - y) * (double)qRed(lbot) + (x - x1) * (y - y1) * (double)qRed(rbot);
-    rgb[1] += (x2 - x) * (y2 - y) * (double)qGreen(ltop) + (x2 - x) * (y - y1) * (double)qGreen(rtop) + 
-            (x - x1) * (y2 - y) * (double)qGreen(lbot) + (x - x1) * (y - y1) * (double)qGreen(rbot);
-    rgb[2] += (x2 - x) * (y2 - y) * (double)qBlue(ltop) + (x2 - x) * (y - y1) * (double)qBlue(rtop) + 
-            (x - x1) * (y2 - y) * (double)qBlue(lbot) + (x - x1) * (y - y1) * (double)qBlue(rbot);
+    }
+    else
+        return false;
 
     return true;
 }
@@ -753,15 +748,65 @@ Stitch together two images using the homography transformation
 *******************************************************************************/
 void MainWindow::Stitch(QImage image1, QImage image2, double hom[3][3], double homInv[3][3], QImage &stitchedImage)
 {
-    // Width and height of stitchedImage
-    int ws = 0;
-    int hs = 0;
+    int r, c, i;
+    QRgb pixel;
+    int ws, hs;
+    int w1 = image1.width();
+    int h1 = image1.height();
+    int w2 = image2.width();
+    int h2 = image2.height();
+    int cmin = 0;
+    int cmax = w1;
+    int rmin = 0;
+    int rmax = h1;
+    double corners[8];
 
-    // Add your code to compute ws and hs here.
+    corners[0] = corners[1] = corners[3] = corners[4] = 0.0;
+    corners[2] = corners[6] = (double) w2;
+    corners[5] = corners[7] = (double) h2;
 
+    // Compute ws and has by projecting four corners of image2 to image1
+    for(i = 0; i < 4; i++) {
+        double x, y;
+        Project(corners[i * 2], corners[i * 2 + 1], x, y, homInv);
+        int r = floor(y + 0.5);
+        int c = floor(x + 0.5);
+        cmin = cmin > c ? c : cmin;
+        cmax = cmax < c ? c : cmax;
+        rmin = rmin > r ? r : rmin;
+        rmax = rmax < r ? r : rmax;
+    }
+
+    ws = cmax - cmin;
+    hs = rmax - rmin;
+
+    // Initialize the stitchedImage
     stitchedImage = QImage(ws, hs, QImage::Format_RGB32);
     stitchedImage.fill(qRgb(0,0,0));
 
-    // Add you code to warp image1 and image2 to stitchedImage here.
+    // Warp image1 and image2 to stitchedImage.
+    // Copy image1 to stitchedImage
+    for(r = 0; r < h1; r++) {
+        for(c = 0; c < w1; c++) {
+            pixel = image1.pixel(c, r);
+            stitchedImage.setPixel(c - cmin, r - rmin, pixel);
+        }
+    }
+
+    // Project each pixel of stitchedImage onto image2
+    // bilinearInterpolate the value
+    for(r = 0; r < hs; r++) {
+        for(c = 0; c < ws; c++) {
+            double x, y; 
+            double rgb[3];
+            pixel = stitchedImage.pixel(c, r);
+            Project((double)(c + cmin), (double)(r + rmin), x, y, hom);
+            if(BilinearInterpolation(&image2, x, y, rgb)) {
+                stitchedImage.setPixel(c, r, qRgb((int) rgb[0], (int) rgb[1], (int) rgb[2]));
+            }
+
+        }
+    }
+
 }
 
