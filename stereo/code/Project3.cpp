@@ -370,10 +370,42 @@ Compute match cost using Squared Distance
 *******************************************************************************/
 void MainWindow::SSD(QImage image1, QImage image2, int minDisparity, int maxDisparity, int offset, double *matchCost)
 {
+	// SSD is performed by sum(image1's pixel - image2's pixel)^2
     int w = image1.width();
     int h = image1.height();
 
-    // Add your code here
+    int size = 2 * offset + 1;
+
+    int r, c, d;
+    int i, j;
+    QRgb p1, p2;
+    double rd, gd, bd;
+
+    for(d = minDisparity; d < maxDisparity; d++) {
+    	for(r = offset; r < h - offset; r++) {
+    		for(c = offset; c < w - offset; c++) {
+    			double sum = 0.0; // aggregated sum over window
+    			if((c + i - d) >= offset && (c  + i - d) < w - offset) {
+	    			for(i = -offset; i <= offset; i++){
+	    				for(j = -offset; j <= offset; j++) {
+	    					
+		    				p1 = image1.pixel(c + i, r + j);
+		    				p2 = image1.pixel(c + i - d, r + j);
+
+		    				rd = pow((double)qRed(p1) - (double)qRed(p2), 2.0);
+		    				gd = pow((double)qGreen(p1) - (double)qGreen(p2), 2.0);
+		    				bd = pow((double)qBlue(p1) - (double)qBlue(p2), 2.0);
+
+		    				sum += sqrt(rd + gd + bd);
+			    		}
+	    			}
+    			}
+    			matchCost[(d - minDisparity) * w * h + r * w + c] = sum;
+    		}
+    	}
+    }
+
+
 }
 
 /*******************************************************************************
@@ -390,10 +422,41 @@ Compute match cost using Absolute Distance
 *******************************************************************************/
 void MainWindow::SAD(QImage image1, QImage image2, int minDisparity, int maxDisparity, int offset, double *matchCost)
 {
-   int w = image1.width();
-   int h = image1.height();
+	// SAD is performed by sum(abs(image1's pixel - image2's pixel))
+   	int w = image1.width();
+   	int h = image1.height();
 
-   // Add your code here
+   	int size = 2 * offset + 1;
+
+    int r, c, d;
+    int i, j;
+    QRgb p1, p2;
+    double rd, gd, bd;
+
+    for(d = minDisparity; d < maxDisparity; d++) {
+    	for(r = offset; r < h - offset; r++) {
+    		for(c = offset; c < w - offset; c++) {
+    			double sum = 0.0; // aggregated sum over window
+    			if((c + i - d) >= offset && (c  + i - d) < w - offset) {
+	    			for(i = -offset; i <= offset; i++){
+	    				for(j = -offset; j <= offset; j++) {
+
+		    				p1 = image1.pixel(c + i, r + j);
+		    				p2 = image1.pixel(c + i - d, r + j);
+
+		    				rd = abs((double)qRed(p1) - (double)qRed(p2));
+		    				gd = abs((double)qGreen(p1) - (double)qGreen(p2));
+		    				bd = abs((double)qBlue(p1) - (double)qBlue(p2));
+
+		    				sum += rd + gd + bd;
+		    			}
+    				}
+    			}
+    			matchCost[(d - minDisparity) * w * h + r * w + c] = sum;
+    			
+    		}
+    	}
+    }
 
 }
 
@@ -411,10 +474,55 @@ Compute match cost using Normalized Cross Correlation
 *******************************************************************************/
 void MainWindow::NCC(QImage image1, QImage image2, int minDisparity, int maxDisparity, int offset, double *matchCost)
 {
-   int w = image1.width();
-   int h = image1.height();
+	// NCC is performed by
+	int w = image1.width();
+	int h = image1.height();
 
-   // Add your code here
+	int size = 2 * offset + 1;
+
+    int r, c, d;
+    int i, j;
+    QRgb p1, p2;
+    double rd, gd, bd;
+
+    for(d = minDisparity; d < maxDisparity; d++) {
+    	for(r = offset; r < h - offset; r++) {
+    		for(c = offset; c < w - offset; c++) {
+    			double xs = 0.0; 
+    			double ys = 0.0; // aggregated sum over window
+    			double xy = 0.0;
+
+    			if((c + i - d) >= offset && (c  + i - d) < w - offset) {
+	    			for(i = -offset; i <= offset; i++){
+	    				for(j = -offset; j <= offset; j++) {
+
+		    				p1 = image1.pixel(c + i, r + j);
+		    				p2 = image1.pixel(c + i - d, r + j);
+
+                            double r1 = (double) qRed(pixel1);
+                            double g1 = (double) qGreen(pixel1);
+                            double b1 = (double) qBlue(pixel1);
+
+                            double r2 = (double) qRed(pixel2);
+                            double g2 = (double) qGreen(pixel2);
+                            double b2 = (double) qBlue(pixel2);
+
+                            xy += r1 * r2 + g1 * g2 + b1 * b2;
+
+                            xs += r1 * r1 + g1 * g1 + b1 * b1;
+
+                            ys += r2 * r2 + g2 * g2 + b2 * b2;
+		    			}
+    				}
+    				matchCost[(d - minDisparity) * w * h + r * w + c] = 1.0 - xy / sqrt(xs * ys);
+    			} else {
+    				matchCost[(d - minDisparity) * w * h + r * w + c] = 0.0;
+    			}
+    			
+    			
+    		}
+    	}
+    }
 
 }
 
@@ -442,7 +550,92 @@ Blur a floating piont image using Gaussian kernel (helper function for GaussianB
 *******************************************************************************/
 void MainWindow::SeparableGaussianBlurImage(double *image, int w, int h, double sigma)
 {
-    // Add your code here
+    if(sigma == 0) return;
+
+    int r, c, rd, cd, i;
+    double pixel;
+
+    // This is the size of the kernel
+    int isig = (int)sigma;
+    int size = 2 * isig + 1;
+
+
+    // Create a buffer image so we're not reading and writing to the same image during filtering.
+    double *buffer = new double [w * h];
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            buffer[r * w + c] = image[r * w + c]; 
+        }
+    }
+
+    // Compute kernel to convolve with the image.
+    double* kernel = new double [size];
+    double mean = size / 2.0;
+    double sum = 0.000001;
+    for(i = 0; i < size; i++) {
+        kernel[i] = exp(-0.5 * pow((i - mean) / sigma, 2.0)) / (sqrt(2 * M_PI) * sigma);
+        sum += kernel[i];
+    }
+
+    // Normalize kernel weights
+    for(i = 0; i < size; i++)
+        kernel[i] /= sum;
+
+    // Convolve kernel around image
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            double result = 0.0;
+
+            // Convolve the kernel at each pixel
+            for(rd = -isig; rd <= isig; rd++) {
+                if(r + rd >= 0 && r + rd < h) {
+            
+                    pixel = buffer[(r + rd) * w + c];
+
+                    // Get the value of the kernel
+                    double weight = kernel[rd + isig];
+
+                    result += weight * pixel;
+                }
+
+            }
+
+            // Store convolved pixel in the image to be returned.
+            image[r * w + c] = result;
+        }
+    }
+
+    // make a new copy from updated image
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            buffer[r * w + c] = image[r * w + c]; 
+        }
+    }
+
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            double result = 0.0;
+
+            // Convolve the kernel at each pixel
+            for(cd = -isig; cd <= isig; cd++) {
+                if(c + cd >= 0 && c + cd < w) {
+                    pixel = buffer[r * w + c + cd];
+
+                    // Get the value of the kernel
+                    double weight = kernel[cd + isig];
+
+                    result += weight * pixel;
+                }
+            }
+
+            // Store convolved pixel in the image to be returned.
+            image[r * w + c] = result;
+        }
+    }
+
+    // Clean up.
+    delete [] kernel;
+    delete [] buffer;
 }
 
 
@@ -572,7 +765,24 @@ For each pixel find the disparity with minimum match cost
 *******************************************************************************/
 void MainWindow::FindBestDisparity(double *matchCost, double *disparities, int w, int h, int minDisparity, int numDisparities)
 {
-    // Add your code here
+    int r, c, d, i;
+    double mincost;
+
+    // Find mincost for in each disparity of each pixel
+   
+    for(r = 0; r < h; r++) {
+    	for(c = 0; c < w; c++) {
+    		mincost = -INFINITY;
+    		i = 0;
+    		for(d = 0; d < numDisparities; d++) {
+    			if(mincost > matchCost[d * w * h + r * w + c]) {
+    				mincost = matchCost[d * w * h + r * w + c];
+    				i = d + minDisparity;
+    			}
+    		}
+    		disparities[r * w + c] = (double)i; // store the index
+    	}
+	}
 }
 
 /*******************************************************************************
