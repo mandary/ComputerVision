@@ -372,37 +372,39 @@ void MainWindow::SSD(QImage image1, QImage image2, int minDisparity, int maxDisp
 {
 	// SSD is performed by sum(image1's pixel - image2's pixel)^2
     int w = image1.width();
-    int h = image1.height();
+	int h = image1.height();
 
-    int size = 2 * offset + 1;
-
-    int r, c, d;
-    int i, j;
-    QRgb p1, p2;
+    int r, c, d, i, j;
     double rd, gd, bd;
+    QRgb p1;
+    QRgb p2;
 
     for(d = minDisparity; d < maxDisparity; d++) {
-    	for(r = offset; r < h - offset; r++) {
-    		for(c = offset; c < w - offset; c++) {
-    			double sum = 0.0; // aggregated sum over window
-    			if((c + i - d) >= offset && (c  + i - d) < w - offset) {
-	    			for(i = -offset; i <= offset; i++){
-	    				for(j = -offset; j <= offset; j++) {
-	    					
-		    				p1 = image1.pixel(c + i, r + j);
-		    				p2 = image1.pixel(c + i - d, r + j);
+        for(r = offset; r < h - offset; r++) {
+            for(c = offset; c < w - offset; c++) {
+            	matchCost[(d - minDisparity) * w * h + r * w + c] = 0.0;
+                if(c - d >= offset && c - d < w - offset) {
+                    
+                    rd = gd = bd = 0.0; // aggregated sum over window
 
-		    				rd = pow((double)qRed(p1) - (double)qRed(p2), 2.0);
-		    				gd = pow((double)qGreen(p1) - (double)qGreen(p2), 2.0);
-		    				bd = pow((double)qBlue(p1) - (double)qBlue(p2), 2.0);
+                    for(i = -offset; i <= offset; i++) {
+                        for(j = -offset; j <= offset; j++) {
+                            p1 = image1.pixel(c + i, r + j);
+                            p2 = image2.pixel(c - d + i, r + j);
 
-		    				sum += sqrt(rd + gd + bd);
-			    		}
-	    			}
-    			}
-    			matchCost[(d - minDisparity) * w * h + r * w + c] = sum;
-    		}
-    	}
+							rd += pow((double)qRed(p1) - (double)qRed(p2), 2.0);
+		    				gd += pow((double)qGreen(p1) - (double)qGreen(p2), 2.0);
+		    				bd += pow((double)qBlue(p1) - (double)qBlue(p2), 2.0);
+
+                        }
+                    }
+                    rd /= pow(offset * 2 + 1, 2.0);
+                    gd /= pow(offset * 2 + 1, 2.0);
+                    bd /= pow(offset * 2 + 1, 2.0);
+                    matchCost[(d - minDisparity) * w * h + r * w + c] = sqrt(rd + gd + bd);
+                } 
+            }
+        }
     }
 
 
@@ -423,41 +425,43 @@ Compute match cost using Absolute Distance
 void MainWindow::SAD(QImage image1, QImage image2, int minDisparity, int maxDisparity, int offset, double *matchCost)
 {
 	// SAD is performed by sum(abs(image1's pixel - image2's pixel))
-   	int w = image1.width();
-   	int h = image1.height();
+    int w = image1.width();
+	int h = image1.height();
 
-   	int size = 2 * offset + 1;
-
-    int r, c, d;
-    int i, j;
-    QRgb p1, p2;
+    int r, c, d, i, j;
     double rd, gd, bd;
+    QRgb p1;
+    QRgb p2;
 
     for(d = minDisparity; d < maxDisparity; d++) {
-    	for(r = offset; r < h - offset; r++) {
-    		for(c = offset; c < w - offset; c++) {
-    			double sum = 0.0; // aggregated sum over window
-    			if((c + i - d) >= offset && (c  + i - d) < w - offset) {
-	    			for(i = -offset; i <= offset; i++){
-	    				for(j = -offset; j <= offset; j++) {
 
-		    				p1 = image1.pixel(c + i, r + j);
-		    				p2 = image1.pixel(c + i - d, r + j);
+        for(r = offset; r < h - offset; r++) {
+            for(c = offset; c < w - offset; c++) {
+            	matchCost[(d - minDisparity) * w * h + r * w + c] = 0.0;
+                if(c - d >= offset && c - d < w - offset) {
+                    
+                    rd = gd = bd = 0.0; // aggregated sum over window
 
-		    				rd = abs((double)qRed(p1) - (double)qRed(p2));
-		    				gd = abs((double)qGreen(p1) - (double)qGreen(p2));
-		    				bd = abs((double)qBlue(p1) - (double)qBlue(p2));
+                    for(i = -offset; i <= offset; i++) {
+                        for(j = -offset; j <= offset; j++) {
+                            p1 = image1.pixel(c + i, r + j);
+                            p2 = image2.pixel(c - d + i, r + j);
 
-		    				sum += rd + gd + bd;
-		    			}
-    				}
-    			}
-    			matchCost[(d - minDisparity) * w * h + r * w + c] = sum;
-    			
-    		}
-    	}
+                         
+							rd += abs((double)qRed(p1) - (double)qRed(p2));
+		    				gd += abs((double)qGreen(p1) - (double)qGreen(p2));
+		    				bd += abs((double)qBlue(p1) - (double)qBlue(p2));
+
+                        }
+                    }
+                    rd /= pow(offset * 2 + 1, 2.0);
+                    gd /= pow(offset * 2 + 1, 2.0);
+                    bd /= pow(offset * 2 + 1, 2.0);
+                    matchCost[(d - minDisparity) * w * h + r * w + c] = rd + gd + bd;
+                } 
+            }
+        }
     }
-
 }
 
 /*******************************************************************************
@@ -474,54 +478,50 @@ Compute match cost using Normalized Cross Correlation
 *******************************************************************************/
 void MainWindow::NCC(QImage image1, QImage image2, int minDisparity, int maxDisparity, int offset, double *matchCost)
 {
-	// NCC is performed by
+	// NCC is performed by sum(image1 * image2) / sqrt(sum(image1)^2 * sum(image)^2)
 	int w = image1.width();
 	int h = image1.height();
 
-	int size = 2 * offset + 1;
-
-    int r, c, d;
-    int i, j;
-    QRgb p1, p2;
-    double rd, gd, bd;
+    int r, c, d, i, j;
+    double i1, i2, i12;
+    QRgb p1;
+    QRgb p2;
 
     for(d = minDisparity; d < maxDisparity; d++) {
-    	for(r = offset; r < h - offset; r++) {
-    		for(c = offset; c < w - offset; c++) {
-    			double xs = 0.0; 
-    			double ys = 0.0; // aggregated sum over window
-    			double xy = 0.0;
 
-    			if((c + i - d) >= offset && (c  + i - d) < w - offset) {
-	    			for(i = -offset; i <= offset; i++){
-	    				for(j = -offset; j <= offset; j++) {
+        for(r = offset; r < h - offset; r++) {
+            for(c = offset; c < w - offset; c++) {
+            	matchCost[(d - minDisparity) * w * h + r * w + c] = 0.0;
+                if(c - d >= offset && c - d < w - offset) {
+                    
+                    i1 = i2 = i12 = 0.0;
 
-		    				p1 = image1.pixel(c + i, r + j);
-		    				p2 = image1.pixel(c + i - d, r + j);
+                    for(i = -offset; i <= offset; i++) {
+                        for(j = -offset; j <= offset; j++) {
+                            p1 = image1.pixel(c + i, r + j);
+                            p2 = image2.pixel(c - d + i, r + j);
 
-                            double r1 = (double) qRed(pixel1);
-                            double g1 = (double) qGreen(pixel1);
-                            double b1 = (double) qBlue(pixel1);
+                            double r1 = (double) qRed(p1);
+                            double g1 = (double) qGreen(p1);
+                            double b1 = (double) qBlue(p1);
 
-                            double r2 = (double) qRed(pixel2);
-                            double g2 = (double) qGreen(pixel2);
-                            double b2 = (double) qBlue(pixel2);
+                            double r2 = (double) qRed(p2);
+                            double g2 = (double) qGreen(p2);
+                            double b2 = (double) qBlue(p2);
 
-                            xy += r1 * r2 + g1 * g2 + b1 * b2;
+                            i1 += r1 * r1 + g1 * g1 + b1 * b1;
 
-                            xs += r1 * r1 + g1 * g1 + b1 * b1;
+                            i12 += r1 * r2 + g1 * g2 + b1 * b2;
 
-                            ys += r2 * r2 + g2 * g2 + b2 * b2;
-		    			}
-    				}
-    				matchCost[(d - minDisparity) * w * h + r * w + c] = 1.0 - xy / sqrt(xs * ys);
-    			} else {
-    				matchCost[(d - minDisparity) * w * h + r * w + c] = 0.0;
-    			}
-    			
-    			
-    		}
-    	}
+                            i2 += r2 * r2 + g2 * g2 + b2 * b2;
+                        }
+                    }
+
+                    matchCost[(d - minDisparity) * w * h + r * w + c] = 1.0 - i12 / (sqrt(i1 * i2));
+
+                } 
+            }
+        }
     }
 
 }
@@ -537,7 +537,11 @@ Gaussian blur the match score.
 *******************************************************************************/
 void MainWindow::GaussianBlurMatchScore(double *matchCost, int w, int h, int numDisparities, double sigma)
 {
-    // Add your code here
+    int d;
+
+    for(d = 0; d < numDisparities; d++) {
+        SeparableGaussianBlurImage(&(matchCost[d * w * h]), w, h, sigma);
+    }
 }
 
 /*******************************************************************************
@@ -721,7 +725,11 @@ Compute the mean color and position for each segment (helper function for Segmen
 *******************************************************************************/
 void MainWindow::ComputeSegmentMeans(QImage image, int *segment, int numSegments, double (*meanSpatial)[2], double (*meanColor)[3])
 {
-    // Add your code here
+	int w = image.width();
+	int h = image.width();
+    double *mean = new double[numSegments];
+    QRgb pixel;
+    
 }
 
 /*******************************************************************************
@@ -772,7 +780,7 @@ void MainWindow::FindBestDisparity(double *matchCost, double *disparities, int w
    
     for(r = 0; r < h; r++) {
     	for(c = 0; c < w; c++) {
-    		mincost = -INFINITY;
+    		mincost = INFINITY;
     		i = 0;
     		for(d = 0; d < numDisparities; d++) {
     			if(mincost > matchCost[d * w * h + r * w + c]) {
