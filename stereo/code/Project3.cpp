@@ -720,7 +720,7 @@ Compute the mean color and position for each segment (helper function for Segmen
 void MainWindow::ComputeSegmentMeans(QImage image, int *segment, int numSegments, double (*meanSpatial)[2], double (*meanColor)[3])
 {
 	int w = image.width();
-	int h = image.width();
+	int h = image.height();
     double *count = new double[numSegments];
     QRgb pixel;
 
@@ -778,7 +778,7 @@ void MainWindow::AssignPixelsToSegments(QImage image, int *segment, int numSegme
 {
 	// Mahalanobis distance is SD(ps - ms)/spatialSigma^2 + SD(pc - mc)/colorSigma^2
 	int w = image.width();
-	int h = image.width();
+	int h = image.height();
     int r, c, i;
     QRgb pixel;
     double cold, rowd, rd, gd, bd, distance;
@@ -819,7 +819,34 @@ for each pixel in a segment.
 void MainWindow::SegmentAverageMatchCost(int *segment, int numSegments,
                                          int w, int h, int numDisparities, double *matchCost)
 {
-    // Add your code here
+    int r, c, d;
+    double *count = new double[numSegments];
+    double *sum = new double[numSegments];
+
+    for(d = 0; d < numDisparities; d++) {
+    	memset(count, 0, numSegments * sizeof(double));
+    	memset(sum, 0, numSegments * sizeof(double));
+    	// Accumulate value for each segment's matchcost
+	    for(r = 0; r < h; r++) {
+	    	for(c = 0; c < w; c++) {
+	    		sum[segment[r * w + c]] += matchCost[d * w * h + r * w + c];
+	    		count[segment[r * w + c]]++;
+	    	}
+	    }
+
+	    // Average value for segment's matchcost
+	    for(r = 0; r < h; r++) {
+	    	for(c = 0; c < w; c++) {
+	    		matchCost[d * w * h + r * w + c] = sum[segment[r * w + c]] / count[segment[r * w + c]];
+	    	}
+	    }
+	}
+
+	// Clean up
+	delete [] count;
+	delete [] sum;
+
+
 }
 
 /*******************************************************************************
