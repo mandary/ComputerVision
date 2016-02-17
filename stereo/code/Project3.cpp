@@ -398,9 +398,6 @@ void MainWindow::SSD(QImage image1, QImage image2, int minDisparity, int maxDisp
 
                         }
                     }
-                    rd /= pow(offset * 2 + 1, 2.0);
-                    gd /= pow(offset * 2 + 1, 2.0);
-                    bd /= pow(offset * 2 + 1, 2.0);
                     matchCost[(d - minDisparity) * w * h + r * w + c] = sqrt(rd + gd + bd);
                 } 
             }
@@ -454,9 +451,6 @@ void MainWindow::SAD(QImage image1, QImage image2, int minDisparity, int maxDisp
 
                         }
                     }
-                    rd /= pow(offset * 2 + 1, 2.0);
-                    gd /= pow(offset * 2 + 1, 2.0);
-                    bd /= pow(offset * 2 + 1, 2.0);
                     matchCost[(d - minDisparity) * w * h + r * w + c] = rd + gd + bd;
                 } 
             }
@@ -727,9 +721,46 @@ void MainWindow::ComputeSegmentMeans(QImage image, int *segment, int numSegments
 {
 	int w = image.width();
 	int h = image.width();
-    double *mean = new double[numSegments];
+    double *count = new double[numSegments];
     QRgb pixel;
-    
+
+    int r, c, i;
+
+    memset(count, 0, numSegments * sizeof(double));
+	memset(meanSpatial, 0, 2 * numSegments * sizeof(double));
+    memset(meanColor, 0, 3 * numSegments * sizeof(double));
+
+    // Aggregate sum of each segment's positions and color
+    for(r = 0; r < h; r++) {
+        for(c = 0; c < w; c++) {
+            pixel = image.pixel(c, r);
+            // position
+            meanSpatial[segment[r * w + c]][0] += (double) c;
+            meanSpatial[segment[r * w + c]][1] += (double) r;
+            
+            // color
+            meanColor[segment[r * w + c]][0] += (double) qRed(pixel);
+            meanColor[segment[r * w + c]][1] += (double) qGreen(pixel);
+            meanColor[segment[r * w + c]][2] += (double) qBlue(pixel);
+
+            // count of each segements
+            count[segment[r * w + c]]++;
+        }
+    }
+
+    for(i = 0; i < numSegments; i++) {
+    	// Average
+    	meanSpatial[i][0] /= count[i];
+    	meanSpatial[i][1] /= count[i];
+
+    	meanColor[i][0] /= count[i];
+    	meanColor[i][1] /= count[i];
+    	meanColor[i][2] /= count[i];
+    }
+
+    // Clean up
+    delete [] count;
+
 }
 
 /*******************************************************************************
