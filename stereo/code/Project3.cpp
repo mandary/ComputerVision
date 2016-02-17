@@ -776,11 +776,39 @@ Assign each pixel to the closest segment using position and color
 void MainWindow::AssignPixelsToSegments(QImage image, int *segment, int numSegments, double (*meanSpatial)[2], double (*meanColor)[3],
                             double spatialSigma, double colorSigma)
 {
-    // Add your code here
+	// Mahalanobis distance is SD(ps - ms)/spatialSigma^2 + SD(pc - mc)/colorSigma^2
+	int w = image.width();
+	int h = image.width();
+    int r, c, i;
+    QRgb pixel;
+    double cold, rowd, rd, gd, bd, distance;
+    for(r = 0; r < h; r++) {
+    	for(c = 0; c < w; c++) {
+    		double mindist = INFINITY;
+    		int index = 0;
+    		// find the closest segment
+    		for(i = 0; i < numSegments; i++) {
+    			pixel = image.pixel(c, r);
+    			cold = pow(c - meanSpatial[i][0], 2.0);
+    			rowd = pow(r - meanSpatial[i][1], 2.0);
+    			rd = pow(qRed(pixel) - meanColor[i][0], 2.0);
+    			gd = pow(qGreen(pixel) - meanColor[i][1], 2.0);
+    			bd = pow(qBlue(pixel) - meanColor[i][2], 2.0);
+
+    			distance = (cold + rowd)/pow(spatialSigma, 2.0) + (rd + gd + bd)/pow(colorSigma, 2.0);
+
+    			if(distance < mindist) {
+    				mindist = distance;
+    				index = i;
+    			}
+    		}
+    		segment[r * w + c] = index;
+    	}
+    }
 }
 
 /*******************************************************************************
-Update the match cost based ont eh segmentation.  That is, average the match cost
+Update the match cost based on the segmentation.  That is, average the match cost
 for each pixel in a segment.
     segment - Image segmentation
     numSegments - Number of segments
