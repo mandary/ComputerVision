@@ -375,7 +375,7 @@ void MainWindow::HarrisCornerDetector(QImage image, double sigma, double thres, 
     double *ixy = new double[w * h];
     double *harris = new double[w * h];
 
-    // Compute the corner response using graytone
+    // Compute the corner response using green band only
     // Initialize ixix, iyiy, ixiy
     for(r = 0; r < h; r++) {
         for(c = 0; c < w; c++) {
