@@ -358,6 +358,39 @@ void MainWindow::InitializeFeatures(CWeakClassifiers *weakClassifiers, int numWe
             weakClassifiers[i].m_Box[2][1][1] = y + h;
         }
 
+        if(boxType == 3)
+        {
+            // 4 Vertical boxes
+            weakClassifiers[i].m_NumBoxes = 4;
+            weakClassifiers[i].m_Box = new double [weakClassifiers[i].m_NumBoxes][2][2];
+            weakClassifiers[i].m_BoxSign = new double [weakClassifiers[i].m_NumBoxes];
+
+            weakClassifiers[i].m_BoxSign[0] = 1.0;
+            weakClassifiers[i].m_Box[0][0][0] = x;
+            weakClassifiers[i].m_Box[0][0][1] = y;
+            weakClassifiers[i].m_Box[0][1][0] = x + w/2;
+            weakClassifiers[i].m_Box[0][1][1] = y + h/2;
+
+            weakClassifiers[i].m_BoxSign[1] = -1.0;
+            weakClassifiers[i].m_Box[1][0][0] = x + w/2;
+            weakClassifiers[i].m_Box[1][0][1] = y;
+            weakClassifiers[i].m_Box[1][1][0] = x + w;
+            weakClassifiers[i].m_Box[1][1][1] = y + h/2;
+
+            weakClassifiers[i].m_BoxSign[2] = -1.0;
+            weakClassifiers[i].m_Box[2][0][0] = x;
+            weakClassifiers[i].m_Box[2][0][1] = y + h/2;
+            weakClassifiers[i].m_Box[2][1][0] = x + w/2;
+            weakClassifiers[i].m_Box[2][1][1] = y + h;
+
+            weakClassifiers[i].m_BoxSign[3] = 1.0;
+            weakClassifiers[i].m_Box[3][0][0] = x + w/2;
+            weakClassifiers[i].m_Box[3][0][1] = y + h/2;
+            weakClassifiers[i].m_Box[3][1][0] = x + w;
+            weakClassifiers[i].m_Box[3][1][1] = y + h;
+        }
+
+
         weakClassifiers[i].m_Area = w*h;
     }
 }
@@ -856,7 +889,7 @@ void MainWindow::ComputeFeatures(double *integralImage, int c0, int r0, int size
             // Store the final feature value
             features[i] += weakClassifiers[i].m_BoxSign[j]*sum/((double) (size*size));
         }
-    }/
+    }
 }
 
 /*******************************************************************************
@@ -880,7 +913,68 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
 
 
     // Add your code here.
+    int p, i;
+    double error;
 
+    // for each polarity
+    for(p = 0; p <= 1; p++){
+        error = 0.0;
+
+        // first find the primal threshold which is palced before the first example.
+        // and find its error
+        for(i = 0; i < numTrainingExamples; i++){
+            if(p == 0){
+                if(trainingLabel[i] == 1){
+                    error += dataWeights[i];
+                }
+            }else{
+                if(trainingLabel[i] == 0){
+                    error += dataWeights[i];
+                }
+            }
+        }
+        // check if the primal threshold is good enough
+        if(error < bestError){
+            bestError = error;
+            bestClassifier->m_Polarity = p;
+            bestClassifier->m_Threshold = (features[featureSortIdx[0]] - 1);
+            bestClassifier->m_Weight = log((1 - error)/error);
+        }
+        // move threshold from the very left to the very right
+        // each loop process one example right
+        for(i = 0; i < numTrainingExamples; i++){
+            int index = featureSortIdx[i];
+            if(p == 0){
+                if(trainingLabel[index] == 1){
+                    // it is not correct on previous threshold, but correct for this one
+                    error -= dataWeights[index];
+                }else{
+                    // it is correct on previous threshold, but not correct for this one
+                    error += dataWeights[index];
+                }
+            }else{
+                if(trainingLabel[index] == 0){
+                    // it is not correct on previous threshold, but correct for this one
+                    error -= dataWeights[index];
+                }else{
+                    // it is correct on previous threshold, but not correct for this one
+                    error += dataWeights[index];
+                }
+            }
+            if(error < bestError){
+                bestError = error;
+                bestClassifier->m_Polarity = p;
+                if(i == numTrainingExamples - 1){
+                    // pass the example with largest features, set threshold larger then the last one
+                    bestClassifier->m_Threshold = features[index] + 1;
+                }else{
+                    // in the middle of two example, set threshold be the average of two features
+                    bestClassifier->m_Threshold = (features[index] + features[featureSortIdx[i+1]])/2;
+                }
+                bestClassifier->m_Weight = log((1 - error)/error);
+            }
+        }
+    }
     // Once you find the best weak classifier, you'll need to update the following member variables:
     //      bestClassifier->m_Polarity
     //      bestClassifier->m_Threshold
@@ -901,6 +995,29 @@ double MainWindow::FindBestClassifier(int *featureSortIdx, double *features, int
 void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakClassifiers weakClassifier, double *dataWeights, int numTrainingExamples)
 {
     // Add you code here.
+    int i;
+    // Get required datas
+    double p = weakClassifier.m_Polarity;
+    double threshold = weakClassifier.m_Threshold;
+    double weight = weakClassifier.m_Weight;
+    double sum = 0.0;
+    for(i = 0; i < numTrainingExamples; i++){
+        double f = features[i];
+        bool classifierResult = ((p == 0 && f < threshold)||(p == 1 && f > threshold)); // is face or not based on weak classifier
+        bool labelResult = (trainingLabel[i] == 1); // is face or not based on label
+        // If result agrees, we need update the current example's weight
+        if(classifierResult == labelResult){
+            dataWeights[i] *= pow(M_E, -1 * weight);
+        }
+        // Add weight to total weight
+        sum += dataWeights[i];
+    }
+
+    // Normalize the updates weight
+    for(i = 0; i < numTrainingExamples; i++){
+        dataWeights[i] /= sum;
+    }
+
 }
 
 /*******************************************************************************
@@ -914,9 +1031,29 @@ void MainWindow::UpdateDataWeights(double *features, int *trainingLabel, CWeakCl
 *******************************************************************************/
 double MainWindow::ClassifyBox(double *integralImage, int c0, int r0, int size, CWeakClassifiers *weakClassifiers, int numWeakClassifiers, int w)
 {
-    // Add your code here.
 
-    return 0.0;
+    int i;
+    double feature, polarity, threshold, weight;
+    double* features = new double[numWeakClassifiers];
+    // Compute feature values for the image patch
+    ComputeFeatures(integralImage, c0, r0, size, features, weakClassifiers, numWeakClassifiers, w);
+    double sumWeight = 0.0;
+    double totalWeight = 0.0;
+    // Traverse feature values
+    for(i = 0; i < numWeakClassifiers; i++){
+        feature = features[i];
+        polarity = weakClassifiers[i].m_Polarity;
+        threshold = weakClassifiers[i].m_Threshold;
+        weight = weakClassifiers[i].m_Weight;
+        // true positive or true negative
+        if((polarity == 0 && feature < threshold) || (polarity == 1 && feature > threshold)){
+            sumWeight += weight;
+        }
+        totalWeight += weight;
+    }
+    delete [] features;
+    // classification score
+    return sumWeight - 0.5 * totalWeight;
 }
 
 /*******************************************************************************
@@ -932,15 +1069,34 @@ void MainWindow::NMS(QMap<double, CDetection> *faceDetections, double xyThreshol
     QMap<double, CDetection>::const_iterator iterator = faceDetections->constBegin();
     // Store the final set of face detections in finalFaceDetections
     QMap<double, CDetection> finalFaceDetections;
-
+    double x, y, scale;
     // This is how you iterate through all the faces detections (lowest face detection score first.)
     while(iterator != faceDetections->constEnd())
     {
         // Add your code here.
+        // Save required data for later usage
+        x = iterator->m_X;
+        y = iterator->m_Y;
+        scale = iterator->m_Scale;
 
+        QMap<double, CDetection>::const_iterator iterator2 = (iterator + 1); // a iterator start from next element
+        while(iterator2 != faceDetections->constEnd())
+        {
+            // If find a One is overlapping with current one, stop iterating
+            // because it iterate from lowest to highest, so find a overlapping one
+            // always means that there is a more confident one, so current detection should be removed
+            if(std::abs(x - iterator2->m_X) <= xyThreshold && std::abs(y - iterator2->m_Y) <= xyThreshold && std::abs(scale - iterator2->m_Scale) <= scaleThreshold){
+                break;
+            }
+            iterator2++;
+        }
         // Add a face detection to finalFaceDetections using:
         // finalFaceDetections.insertMulti(iterator.key(), iterator.value());
-
+        // If we cannot find a overlapping dection when reach the end of iterate
+        // Then we don't need to remove it
+        if(iterator2 == faceDetections->constEnd()){
+            finalFaceDetections.insertMulti(iterator.key(), iterator.value());
+        }
         iterator++;
     }
 
